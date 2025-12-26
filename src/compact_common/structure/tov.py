@@ -8,32 +8,91 @@ try:
 except ImportError:
     HAS_NUMBA = False
 
-# Conversion factors (approximate, refine as needed)
+# Conversion factors
 MEV_FM3_TO_G_CM3 = 1.7827e12
 MEV_FM3_TO_DYNE_CM2 = 1.6022e33
 
-# Static JIT-compiled TOV equation function
 if HAS_NUMBA:
     @jit(nopython=True)
-    def _tov_rhs_numba(P, m, r, rho_interp_p, rho_interp_rho, G_val, C_val):
+    def _linear_interp(x, x_arr, y_arr):
+        """Simple linear interpolation for sorted x_arr."""
+        if x <= x_arr[0]:
+            return y_arr[0]
+        if x >= x_arr[-1]:
+            return y_arr[-1]
+        
+        # Binary search for index
+        # For small arrays, linear scan might be faster, but let's do binary
+        idx = np.searchsorted(x_arr, x)
+        
+        x0 = x_arr[idx-1]
+        x1 = x_arr[idx]
+        y0 = y_arr[idx-1]
+        y1 = y_arr[idx]
+        
+        return y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+
+    @jit(nopython=True)
+    def _tov_rhs_numba(r, P, m, p_arr, e_arr, G_val, C_val):
         if P <= 0:
             return 0.0, 0.0
             
-        # Linear interpolation for rho(P)
-        # Assuming sorted P arrays
-        # Since we can't pass scipy interp1d to numba, we implement basic linear interp
-        # or we assume P, rho arrays are passed.
-        # For simplicity in this optimization step, we'll keep it simple or skip full JIT
-        # if interpolation is complex.
+        # Get energy density from pressure
+        # Note: p_arr and e_arr are in CGS here
+        rho = _linear_interp(P, p_arr, e_arr) / C_val**2
         
-        # Actually, let's keep the scipy version as default and only JIT the math part
-        # if we can extract rho.
+        term1 = G_val * (rho + P/C_val**2)
+        term2 = m + (4 * np.pi * r**3 * P) / C_val**2
+        term3 = r * (r - (2 * G_val * m) / C_val**2)
         
-        # Simplified: We only JIT the differential equation part assuming rho is known.
-        pass
+        if term3 == 0:
+            return 0.0, 0.0
+            
+        dP_dr = -(term1 * term2) / term3
+        dm_dr = 4 * np.pi * r**2 * rho
+        
+        return dP_dr, dm_dr
 
-# We will optimize the method by defining a standalone function for the ODE system
-# that can be JIT compiled if we handle the interpolation manually or outside.
+    @jit(nopython=True)
+    def _solve_tov_numba(Pc, p_arr, e_arr, G_val, C_val, max_r, r_min=100.0):
+        # Initial conditions
+        # Approx mass at r_min
+        rho_c = _linear_interp(Pc, p_arr, e_arr) / C_val**2
+        m = (4.0/3.0) * np.pi * r_min**3 * rho_c
+        P = Pc
+        r = r_min
+        
+        # RK4 Integration
+        dr = 1000.0 # Initial step size 10m
+        
+        while r < max_r and P > 0:
+            # Adaptive step size could be better, but fixed is fast
+            # Increase step size as we go out?
+            if r > 1e5: dr = 5000.0 # 50m steps further out
+            
+            k1_P, k1_m = _tov_rhs_numba(r, P, m, p_arr, e_arr, G_val, C_val)
+            k2_P, k2_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k1_P, m + 0.5*dr*k1_m, p_arr, e_arr, G_val, C_val)
+            k3_P, k3_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k2_P, m + 0.5*dr*k2_m, p_arr, e_arr, G_val, C_val)
+            k4_P, k4_m = _tov_rhs_numba(r + dr, P + dr*k3_P, m + dr*k3_m, p_arr, e_arr, G_val, C_val)
+            
+            P_new = P + (dr/6.0) * (k1_P + 2*k2_P + 2*k3_P + k4_P)
+            m_new = m + (dr/6.0) * (k1_m + 2*k2_m + 2*k3_m + k4_m)
+            
+            if P_new <= 0:
+                # Interpolate to find surface
+                # P(r) approx P + P' * dr_surf = 0 -> dr_surf = -P/P'
+                dP = (P_new - P) / dr
+                dr_surf = -P / dP
+                r_surf = r + dr_surf
+                m_surf = m + dr_surf * (m_new - m)/dr # Approx
+                return r_surf, m_surf
+            
+            P = P_new
+            m = m_new
+            r += dr
+            
+        return r, m
+
 
 def _tov_equations_static(r, y, rho_func, G_val, C_val):
     P, m = y
@@ -72,15 +131,20 @@ class TOVSolver:
         self.p_arr = pressure[idx]
         self.e_arr = energy_density[idx]
         
-        # Create interpolation
-        self.eos_interp = interp1d(self.p_arr, self.e_arr, kind='linear', bounds_error=False, fill_value=0)
-        
         # Unit conversion to cgs for calculation if input is MeV/fm^3
         self.p_cgs = self.p_arr * MEV_FM3_TO_DYNE_CM2
         self.e_cgs = self.e_arr * MEV_FM3_TO_G_CM3 
         
+        # Python interpolation (fallback)
         self.rho_cgs = self.p_cgs / C**2 
         self.rho_interp = interp1d(self.p_cgs, self.e_cgs, kind='linear', bounds_error=False, fill_value=0)
+        self.rho_to_p = interp1d(self.e_cgs, self.p_cgs, kind='linear', bounds_error=False, fill_value='extrapolate')
+
+        # Numba preparation
+        if HAS_NUMBA:
+            # Ensure arrays are contiguous float64 for Numba
+            self.p_cgs_jit = np.ascontiguousarray(self.p_cgs, dtype=np.float64)
+            self.e_cgs_jit = np.ascontiguousarray(self.e_cgs, dtype=np.float64)
 
     def _tov_equations(self, r, y):
         """TOV equations wrapper."""
@@ -98,10 +162,14 @@ class TOVSolver:
             tuple: (Radius [km], Mass [M_sun])
         """
         # Convert central density to central pressure using EOS
-        # We need inverse interpolation: rho -> P
-        rho_to_p = interp1d(self.e_cgs, self.p_cgs, kind='linear', bounds_error=False, fill_value='extrapolate')
-        Pc = rho_to_p(central_density)
+        Pc = float(self.rho_to_p(central_density))
         
+        # Fast path
+        if HAS_NUMBA:
+            R_surf, M_surf = _solve_tov_numba(Pc, self.p_cgs_jit, self.e_cgs_jit, G, C, float(max_r))
+            return R_surf / 100000.0, M_surf / M_SUN
+
+        # Slow path
         # Initial conditions
         # At r -> 0: P = Pc, m = 0
         # To avoid singularity at r=0, start at small r_min
