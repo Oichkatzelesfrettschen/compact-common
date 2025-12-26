@@ -1,0 +1,124 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "compact-common"
+version = "0.1.0"
+description = "Shared infrastructure for neutron star, black hole, and compact object physics"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.9"
+authors = [
+    { name = "Deirikr Jaiusadastra Afrauthihinngreygaard" }
+]
+keywords = [
+    "neutron-star",
+    "black-hole",
+    "compact-objects",
+    "equation-of-state",
+    "tov",
+    "astrophysics",
+    "general-relativity",
+    "bayesian",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "astropy>=5.0",
+]
+
+[project.optional-dependencies]
+jit = [
+    "numba>=0.56",
+]
+bayesian = [
+    "emcee>=3.0",
+    "dynesty>=2.0",
+    "ultranest>=3.0",
+]
+plotting = [
+    "matplotlib>=3.5",
+    "corner>=2.2",
+]
+grb = [
+    "grb-common>=0.1.0",
+]
+all = [
+    "compact-common[jit,bayesian,plotting,grb]",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "myst-parser>=2.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Repository = "https://github.com/Oichkatzelesfrettschen/compact-common"
+Documentation = "https://compact-common.readthedocs.io"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/compact_common"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",
+    "E741",  # ambiguous variable name (common in physics: l, I, O, M, R)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F401", "F811"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/compact_common"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
