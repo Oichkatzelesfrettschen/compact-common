@@ -34,7 +34,12 @@ class SigmaOmegaModel:
         # Integration (Trapezoidal for speed/simplicity, or use scipy.integrate.quad)
         k = np.linspace(0, kf, 100)
         y_val = integrand(k)
-        integral = np.trapz(y_val, k)
+        
+        # Use numpy.trapezoid (NumPy 2.0) or fallback to trapz
+        try:
+            integral = np.trapezoid(y_val, k)
+        except AttributeError:
+            integral = np.trapz(y_val, k)
         
         rhs = (np.sqrt(self.Gs) / MS) * (Y / (2 * np.pi**2)) * integral
         return sigma - rhs
@@ -75,13 +80,22 @@ class SigmaOmegaModel:
             # Kinetic energy integral
             k = np.linspace(0, kf, 100)
             e_int_vals = np.sqrt(M_star**2 + k**2) * k**2
-            epsilon_integral = np.trapz(e_int_vals, k)
+            
+            try:
+                epsilon_integral = np.trapezoid(e_int_vals, k)
+            except AttributeError:
+                epsilon_integral = np.trapz(e_int_vals, k)
             
             epsilon_total = (1 / (np.pi**2)) * epsilon_integral + epsilon_scalar + epsilon_vector
             
             # Pressure
             p_int_vals = (k**4) / np.sqrt(M_star**2 + k**2)
-            p_integral = np.trapz(p_int_vals, k)
+            
+            try:
+                p_integral = np.trapezoid(p_int_vals, k)
+            except AttributeError:
+                p_integral = np.trapz(p_int_vals, k)
+            
             p_total = (1 / (3 * np.pi**2)) * p_integral - epsilon_scalar + epsilon_vector
             
             energy_density.append(epsilon_total * HBARC)
