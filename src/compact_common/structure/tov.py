@@ -33,19 +33,18 @@ if HAS_NUMBA:
         return y0 + (x - x0) * (y1 - y0) / (x1 - x0)
 
     @jit(nopython=True)
-    def _tov_rhs_numba(r, P, m, p_arr, e_arr, G_val, C_val):
+    def _tov_rhs_numba(r, P, m, p_arr, rho_arr, G_val, C_val):
         if P <= 0:
             return 0.0, 0.0
             
-        # Get energy density from pressure
-        # Note: p_arr and e_arr are in CGS here
-        rho = _linear_interp(P, p_arr, e_arr) / C_val**2
+        # Get mass density from pressure
+        rho = _linear_interp(P, p_arr, rho_arr)
         
         term1 = G_val * (rho + P/C_val**2)
         term2 = m + (4 * np.pi * r**3 * P) / C_val**2
         term3 = r * (r - (2 * G_val * m) / C_val**2)
         
-        if term3 == 0:
+        if term3 <= 0: # Avoid division by zero or black hole interior
             return 0.0, 0.0
             
         dP_dr = -(term1 * term2) / term3
@@ -54,10 +53,9 @@ if HAS_NUMBA:
         return dP_dr, dm_dr
 
     @jit(nopython=True)
-    def _solve_tov_numba(Pc, p_arr, e_arr, G_val, C_val, max_r, r_min=100.0):
+    def _solve_tov_numba(Pc, p_arr, rho_arr, G_val, C_val, max_r, r_min=100.0):
         # Initial conditions
-        # Approx mass at r_min
-        rho_c = _linear_interp(Pc, p_arr, e_arr) / C_val**2
+        rho_c = _linear_interp(Pc, p_arr, rho_arr)
         m = (4.0/3.0) * np.pi * r_min**3 * rho_c
         P = Pc
         r = r_min
@@ -66,25 +64,22 @@ if HAS_NUMBA:
         dr = 1000.0 # Initial step size 10m
         
         while r < max_r and P > 0:
-            # Adaptive step size could be better, but fixed is fast
-            # Increase step size as we go out?
             if r > 1e5: dr = 5000.0 # 50m steps further out
             
-            k1_P, k1_m = _tov_rhs_numba(r, P, m, p_arr, e_arr, G_val, C_val)
-            k2_P, k2_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k1_P, m + 0.5*dr*k1_m, p_arr, e_arr, G_val, C_val)
-            k3_P, k3_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k2_P, m + 0.5*dr*k2_m, p_arr, e_arr, G_val, C_val)
-            k4_P, k4_m = _tov_rhs_numba(r + dr, P + dr*k3_P, m + dr*k3_m, p_arr, e_arr, G_val, C_val)
+            k1_P, k1_m = _tov_rhs_numba(r, P, m, p_arr, rho_arr, G_val, C_val)
+            k2_P, k2_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k1_P, m + 0.5*dr*k1_m, p_arr, rho_arr, G_val, C_val)
+            k3_P, k3_m = _tov_rhs_numba(r + 0.5*dr, P + 0.5*dr*k2_P, m + 0.5*dr*k2_m, p_arr, rho_arr, G_val, C_val)
+            k4_P, k4_m = _tov_rhs_numba(r + dr, P + dr*k3_P, m + dr*k3_m, p_arr, rho_arr, G_val, C_val)
             
             P_new = P + (dr/6.0) * (k1_P + 2*k2_P + 2*k3_P + k4_P)
             m_new = m + (dr/6.0) * (k1_m + 2*k2_m + 2*k3_m + k4_m)
             
             if P_new <= 0:
                 # Interpolate to find surface
-                # P(r) approx P + P' * dr_surf = 0 -> dr_surf = -P/P'
                 dP = (P_new - P) / dr
                 dr_surf = -P / dP
                 r_surf = r + dr_surf
-                m_surf = m + dr_surf * (m_new - m)/dr # Approx
+                m_surf = m + dr_surf * (m_new - m)/dr
                 return r_surf, m_surf
             
             P = P_new
@@ -133,18 +128,17 @@ class TOVSolver:
         
         # Unit conversion to cgs for calculation if input is MeV/fm^3
         self.p_cgs = self.p_arr * MEV_FM3_TO_DYNE_CM2
-        self.e_cgs = self.e_arr * MEV_FM3_TO_G_CM3 
+        self.rho_cgs = self.e_arr * MEV_FM3_TO_G_CM3 
         
         # Python interpolation (fallback)
-        self.rho_cgs = self.p_cgs / C**2 
-        self.rho_interp = interp1d(self.p_cgs, self.e_cgs, kind='linear', bounds_error=False, fill_value=0)
-        self.rho_to_p = interp1d(self.e_cgs, self.p_cgs, kind='linear', bounds_error=False, fill_value='extrapolate')
+        self.rho_interp = interp1d(self.p_cgs, self.rho_cgs, kind='linear', bounds_error=False, fill_value=0)
+        self.rho_to_p = interp1d(self.rho_cgs, self.p_cgs, kind='linear', bounds_error=False, fill_value='extrapolate')
 
         # Numba preparation
         if HAS_NUMBA:
             # Ensure arrays are contiguous float64 for Numba
             self.p_cgs_jit = np.ascontiguousarray(self.p_cgs, dtype=np.float64)
-            self.e_cgs_jit = np.ascontiguousarray(self.e_cgs, dtype=np.float64)
+            self.rho_cgs_jit = np.ascontiguousarray(self.rho_cgs, dtype=np.float64)
 
     def _tov_equations(self, r, y):
         """TOV equations wrapper."""
@@ -166,7 +160,7 @@ class TOVSolver:
         
         # Fast path
         if HAS_NUMBA:
-            R_surf, M_surf = _solve_tov_numba(Pc, self.p_cgs_jit, self.e_cgs_jit, G, C, float(max_r))
+            R_surf, M_surf = _solve_tov_numba(Pc, self.p_cgs_jit, self.rho_cgs_jit, G, C, float(max_r))
             return R_surf / 100000.0, M_surf / M_SUN
 
         # Slow path
@@ -185,6 +179,8 @@ class TOVSolver:
         sol = solve_ivp(self._tov_equations, [r_min, max_r], y0, events=event_zero_pressure, rtol=1e-6)
         
         if sol.status == 0: # Reached max_r without P=0
+            # Debug: print final state
+            # print(f"TOV solver failed to close: r_max={sol.t[-1]:.2e}, P_surf={sol.y[0][-1]:.2e}")
             return None
             
         R_surf = sol.t[-1] # cm
