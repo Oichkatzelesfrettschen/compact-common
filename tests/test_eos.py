@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from compact_common.constants import C, RHO_NUC
-from compact_common.eos import Polytrope, PiecewisePolytrope, FermiGas, RelFermiGas
+from compact_common.constants import RHO_NUC, C
+from compact_common.eos import FermiGas, PiecewisePolytrope, Polytrope, RelFermiGas
 
 
 class TestPolytrope:

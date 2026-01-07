@@ -6,12 +6,12 @@ Schwarzschild and Kerr spacetimes.
 """
 
 from dataclasses import dataclass
-from typing import Tuple, Optional
+from typing import Any, cast
 
 import numpy as np
 from scipy import integrate
 
-from compact_common.constants import G, C
+from compact_common.constants import C, G
 from compact_common.spacetime.schwarzschild import schwarzschild_radius
 
 
@@ -111,8 +111,9 @@ def integrate_geodesic(
     def horizon_event(lambda_param, y):
         return y[1] - r_s * 1.01
 
-    horizon_event.terminal = True
-    horizon_event.direction = -1
+    horizon_event_typed = cast(Any, horizon_event)
+    horizon_event_typed.terminal = True
+    horizon_event_typed.direction = -1
 
     sol = integrate.solve_ivp(
         equations,
@@ -120,7 +121,7 @@ def integrate_geodesic(
         y0,
         method='RK45',
         t_eval=lambda_eval,
-        events=horizon_event,
+        events=horizon_event_typed,
     )
 
     terminated = len(sol.t_events[0]) > 0 if sol.t_events else False
@@ -280,4 +281,4 @@ def shapiro_delay(
         Time delay [s]
     """
     d = np.sqrt((r1 + r2)**2 - impact_param**2)
-    return (2 * G * mass / C**3) * np.log((r1 + r2 + d) / (r1 + r2 - d))
+    return float((2 * G * mass / C**3) * np.log((r1 + r2 + d) / (r1 + r2 - d)))

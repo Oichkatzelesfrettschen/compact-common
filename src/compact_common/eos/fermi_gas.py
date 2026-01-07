@@ -9,14 +9,13 @@ import numpy as np
 from scipy import integrate
 
 from compact_common.constants import (
-    C,
+    FM_TO_CM,
     HBAR,
     HBARC,
     M_NEUTRON,
     M_NEUTRON_MEV,
-    PI,
     PI2,
-    FM_TO_CM,
+    C,
 )
 from compact_common.eos.base import EOSBase
 
@@ -51,7 +50,7 @@ class FermiGas(EOSBase):
         k_F = (6 * pi^2 * n / g)^(1/3) where n = rho / m
         """
         n = density / self.mass  # number density
-        return (6 * PI2 * n / self.g) ** (1 / 3) * HBAR
+        return float((6 * PI2 * n / self.g) ** (1 / 3) * HBAR)
 
     def pressure(self, density: float) -> float:
         """
@@ -61,7 +60,7 @@ class FermiGas(EOSBase):
         """
         n = density / self.mass
         prefactor = (1 / 5) * (6 * PI2 / self.g) ** (2 / 3)
-        return prefactor * HBAR**2 * n ** (5 / 3) / self.mass
+        return float(prefactor * HBAR**2 * n ** (5 / 3) / self.mass)
 
     def energy_density(self, density: float) -> float:
         """
@@ -72,7 +71,7 @@ class FermiGas(EOSBase):
         n = density / self.mass
         k_F = self.fermi_momentum(density)
         E_F = k_F**2 / (2 * self.mass)  # Non-relativistic kinetic energy
-        return density * C**2 + (3 / 5) * n * E_F
+        return float(density * C**2 + (3 / 5) * n * E_F)
 
 
 class RelFermiGas(EOSBase):
@@ -107,15 +106,15 @@ class RelFermiGas(EOSBase):
         # Convert g/cm^3 to fm^-3
         n_fm3 = density / M_NEUTRON * FM_TO_CM**3
         # k_F = (6 * pi^2 * n / g)^(1/3)
-        return (6 * PI2 * n_fm3 / self.g) ** (1 / 3)
+        return float((6 * PI2 * n_fm3 / self.g) ** (1 / 3))
 
     def _energy_integrand(self, k: float) -> float:
         """Integrand for energy density: sqrt(M^2 + k^2) * k^2"""
-        return np.sqrt(self.M**2 + k**2) * k**2
+        return float(np.sqrt(self.M**2 + k**2) * k**2)
 
     def _pressure_integrand(self, k: float) -> float:
         """Integrand for pressure: k^4 / sqrt(M^2 + k^2)"""
-        return k**4 / np.sqrt(self.M**2 + k**2)
+        return float(k**4 / np.sqrt(self.M**2 + k**2))
 
     def pressure(self, density: float) -> float:
         """
@@ -130,11 +129,11 @@ class RelFermiGas(EOSBase):
 
         # Integrate in MeV/fm^3 units
         result, _ = integrate.quad(self._pressure_integrand, 0, k_F)
-        P_mev_fm3 = self.g / (6 * PI2) * result * HBARC  # MeV/fm^3
+        P_mev_fm3 = self.g / (6 * PI2) * float(result) * HBARC  # MeV/fm^3
 
         # Convert to CGS
         from compact_common.constants import MEV_FM3_TO_DYNES
-        return P_mev_fm3 * MEV_FM3_TO_DYNES
+        return float(P_mev_fm3 * MEV_FM3_TO_DYNES)
 
     def energy_density(self, density: float) -> float:
         """
@@ -149,11 +148,11 @@ class RelFermiGas(EOSBase):
 
         # Integrate in MeV/fm^3 units
         result, _ = integrate.quad(self._energy_integrand, 0, k_F)
-        eps_mev_fm3 = self.g / (2 * PI2) * result * HBARC  # MeV/fm^3
+        eps_mev_fm3 = self.g / (2 * PI2) * float(result) * HBARC  # MeV/fm^3
 
         # Convert to CGS
         from compact_common.constants import MEV_FM3_TO_CGS
-        return eps_mev_fm3 * MEV_FM3_TO_CGS
+        return float(eps_mev_fm3 * MEV_FM3_TO_CGS)
 
     def sound_speed(self, density: float) -> float:
         """
@@ -173,7 +172,7 @@ class RelFermiGas(EOSBase):
             return 0.0
 
         cs2 = C**2 * dP / deps
-        return np.sqrt(max(0, min(cs2, C**2)))
+        return float(np.sqrt(max(0.0, min(float(cs2), C**2))))
 
 
 def free_neutron_eos() -> RelFermiGas:

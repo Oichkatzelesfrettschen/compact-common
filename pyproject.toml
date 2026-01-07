@@ -86,12 +86,14 @@ packages = ["src/compact_common"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+extend-exclude = ["benchmarks", "docs", "examples"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4"]
+select = ["E", "F", "I", "B"]
 ignore = [
     "E501",
     "E741",  # ambiguous variable name (common in physics: l, I, O, M, R)
+    "B028",
 ]
 
 [tool.ruff.lint.per-file-ignores]

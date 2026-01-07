@@ -7,11 +7,11 @@ the required abstract methods.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
-from compact_common.constants import C, RHO_NUC
+from compact_common.constants import C
 
 
 @dataclass
@@ -145,7 +145,7 @@ class EOSBase(ABC):
             return 0.0
 
         cs2 = C**2 * dP / deps
-        return np.sqrt(max(0, cs2))
+        return float(np.sqrt(max(0.0, float(cs2))))
 
     def enthalpy(self, density: float) -> float:
         """
@@ -183,7 +183,7 @@ class EOSBase(ABC):
             Baryon number density [cm^-3]
         """
         from compact_common.constants import M_NEUTRON
-        return density / M_NEUTRON
+        return float(density / M_NEUTRON)
 
     def point(self, density: float) -> EOSPoint:
         """Get all EOS quantities at a given density."""

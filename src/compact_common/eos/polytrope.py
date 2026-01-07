@@ -5,11 +5,11 @@ Polytropes are simple analytic EOS models useful for testing and
 understanding scaling relations in compact stars.
 """
 
-from typing import List, Optional, Tuple
+from typing import List
 
 import numpy as np
 
-from compact_common.constants import C, RHO_NUC
+from compact_common.constants import C
 from compact_common.eos.base import EOSBase
 
 
@@ -44,24 +44,24 @@ class Polytrope(EOSBase):
 
     def pressure(self, density: float) -> float:
         """P = K * rho^gamma"""
-        return self.K * density**self.gamma
+        return float(self.K * density**self.gamma)
 
     def energy_density(self, density: float) -> float:
         """epsilon = rho * c^2 + P / (gamma - 1)"""
         P = self.pressure(density)
-        return density * C**2 + P / (self.gamma - 1)
+        return float(density * C**2 + P / (self.gamma - 1))
 
     def sound_speed(self, density: float) -> float:
         """c_s^2 = gamma * P / (epsilon + P)"""
         P = self.pressure(density)
         eps = self.energy_density(density)
         cs2 = self.gamma * P * C**2 / (eps + P)
-        return np.sqrt(cs2)
+        return float(np.sqrt(float(cs2)))
 
     def enthalpy(self, density: float) -> float:
         """h = c^2 + gamma * P / ((gamma - 1) * rho)"""
         P = self.pressure(density)
-        return C**2 + self.gamma * P / ((self.gamma - 1) * density)
+        return float(C**2 + self.gamma * P / ((self.gamma - 1) * density))
 
     @classmethod
     def from_central_pressure(
@@ -158,7 +158,7 @@ class PiecewisePolytrope(EOSBase):
     def pressure(self, density: float) -> float:
         """Piecewise P = K_i * rho^gamma_i"""
         i = self._get_segment(density)
-        return self.Ks[i] * density ** self.gammas[i]
+        return float(self.Ks[i] * density ** self.gammas[i])
 
     def energy_density(self, density: float) -> float:
         """
@@ -178,7 +178,7 @@ class PiecewisePolytrope(EOSBase):
         # Note: For full accuracy, should integrate through all segments
         # This is a simplified form assuming continuous pressure
 
-        return eps
+        return float(eps)
 
     def sound_speed(self, density: float) -> float:
         """c_s in current segment."""
@@ -186,7 +186,7 @@ class PiecewisePolytrope(EOSBase):
         P = self.pressure(density)
         eps = self.energy_density(density)
         cs2 = self.gammas[i] * P * C**2 / (eps + P)
-        return np.sqrt(max(0, cs2))
+        return float(np.sqrt(max(0.0, float(cs2))))
 
 
 # Standard polytrope configurations

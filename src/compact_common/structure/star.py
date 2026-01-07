@@ -3,7 +3,7 @@ Star model containers and mass-radius utilities.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional, cast
 
 import numpy as np
 from scipy import interpolate
@@ -97,29 +97,29 @@ class MassRadiusCurve:
     @property
     def masses_solar(self) -> np.ndarray:
         """Masses in solar units."""
-        return self.masses / M_SUN
+        return cast(np.ndarray, self.masses / M_SUN)
 
     @property
     def radii_km(self) -> np.ndarray:
         """Radii in km."""
-        return self.radii / 1e5
+        return cast(np.ndarray, self.radii / 1e5)
 
     @property
     def max_mass(self) -> float:
         """Maximum mass in solar masses."""
-        return np.max(self.masses) / M_SUN
+        return float(np.max(self.masses) / M_SUN)
 
     @property
     def max_mass_radius(self) -> float:
         """Radius at maximum mass in km."""
         idx = np.argmax(self.masses)
-        return self.radii[idx] / 1e5
+        return float(self.radii[idx] / 1e5)
 
     @property
     def max_mass_density(self) -> float:
         """Central density at maximum mass in g/cm^3."""
         idx = np.argmax(self.masses)
-        return self.central_densities[idx]
+        return float(self.central_densities[idx])
 
     def radius_at_mass(self, mass_solar: float) -> float:
         """
@@ -161,14 +161,14 @@ class MassRadiusCurve:
         """
         dM = np.gradient(self.masses)
         drho = np.gradient(self.central_densities)
-        return dM / drho > 0
+        return cast(np.ndarray, dM / drho > 0)
 
     def canonical_radius(self) -> float:
         """Radius of 1.4 M_sun star in km."""
         try:
             return self.radius_at_mass(1.4)
         except ValueError:
-            return np.nan
+            return float(np.nan)
 
     @classmethod
     def from_solver(cls, solver, n_points: int = 50, **kwargs) -> "MassRadiusCurve":

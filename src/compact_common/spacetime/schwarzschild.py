@@ -11,7 +11,7 @@ where r_s = 2GM/c^2 is the Schwarzschild radius.
 
 import numpy as np
 
-from compact_common.constants import G, C, M_SUN
+from compact_common.constants import C, G
 
 
 def schwarzschild_radius(mass: float) -> float:
@@ -28,7 +28,7 @@ def schwarzschild_radius(mass: float) -> float:
     float
         Schwarzschild radius r_s = 2GM/c^2 [cm]
     """
-    return 2 * G * mass / C**2
+    return float(2 * G * mass / C**2)
 
 
 def schwarzschild_g_tt(r: float, mass: float) -> float:
@@ -49,8 +49,8 @@ def schwarzschild_g_tt(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return np.nan
-    return -(1 - r_s / r) * C**2
+        return float(np.nan)
+    return float(-(1 - r_s / r) * C**2)
 
 
 def schwarzschild_g_rr(r: float, mass: float) -> float:
@@ -71,8 +71,8 @@ def schwarzschild_g_rr(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return np.nan
-    return 1 / (1 - r_s / r)
+        return float(np.nan)
+    return float(1 / (1 - r_s / r))
 
 
 def isco_radius(mass: float, prograde: bool = True) -> float:
@@ -93,7 +93,7 @@ def isco_radius(mass: float, prograde: bool = True) -> float:
     float
         ISCO radius [cm]
     """
-    return 3 * schwarzschild_radius(mass)
+    return float(3 * schwarzschild_radius(mass))
 
 
 def photon_sphere_radius(mass: float) -> float:
@@ -112,7 +112,7 @@ def photon_sphere_radius(mass: float) -> float:
     float
         Photon sphere radius [cm]
     """
-    return 1.5 * schwarzschild_radius(mass)
+    return float(1.5 * schwarzschild_radius(mass))
 
 
 def gravitational_redshift(r: float, mass: float) -> float:
@@ -135,8 +135,8 @@ def gravitational_redshift(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return np.inf
-    return 1 / np.sqrt(1 - r_s / r) - 1
+        return float(np.inf)
+    return float(1 / np.sqrt(1 - r_s / r) - 1)
 
 
 def surface_gravity(r: float, mass: float) -> float:
@@ -159,8 +159,8 @@ def surface_gravity(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return np.inf
-    return G * mass / (r**2 * np.sqrt(1 - r_s / r))
+        return float(np.inf)
+    return float(G * mass / (r**2 * np.sqrt(1 - r_s / r)))
 
 
 def proper_distance(r1: float, r2: float, mass: float, n_steps: int = 1000) -> float:
@@ -188,13 +188,13 @@ def proper_distance(r1: float, r2: float, mass: float, n_steps: int = 1000) -> f
     r_s = schwarzschild_radius(mass)
 
     if r1 <= r_s or r2 <= r_s:
-        return np.inf
+        return float(np.inf)
 
     r_values = np.linspace(r1, r2, n_steps)
     integrand = 1 / np.sqrt(1 - r_s / r_values)
     dr = r_values[1] - r_values[0]
 
-    return np.trapz(integrand, dx=dr)
+    return float(np.trapezoid(integrand, dx=dr))
 
 
 def orbital_period(r: float, mass: float) -> float:
@@ -216,8 +216,8 @@ def orbital_period(r: float, mass: float) -> float:
         Orbital period [s]
     """
     if r <= schwarzschild_radius(mass):
-        return np.nan
-    return 2 * np.pi * np.sqrt(r**3 / (G * mass))
+        return float(np.nan)
+    return float(2 * np.pi * np.sqrt(r**3 / (G * mass)))
 
 
 def orbital_velocity(r: float, mass: float) -> float:
@@ -240,8 +240,8 @@ def orbital_velocity(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return np.nan
-    return np.sqrt(G * mass / r)
+        return float(np.nan)
+    return float(np.sqrt(G * mass / r))
 
 
 def escape_velocity(r: float, mass: float) -> float:
@@ -264,5 +264,5 @@ def escape_velocity(r: float, mass: float) -> float:
     """
     r_s = schwarzschild_radius(mass)
     if r <= r_s:
-        return C
-    return C * np.sqrt(r_s / r)
+        return float(C)
+    return float(C * np.sqrt(r_s / r))

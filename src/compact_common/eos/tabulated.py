@@ -112,28 +112,28 @@ class TabulatedEOS(EOSBase):
         """Interpolated pressure."""
         if density < self.rho_min:
             # Extrapolate low density as ideal gas
-            return self._pressure[0] * (density / self.rho_min) ** (5/3)
+            return float(self._pressure[0] * (density / self.rho_min) ** (5 / 3))
         if density > self.rho_max:
             # Extrapolate high density (caution: may be unphysical)
-            return 10 ** self._P_interp(np.log10(density))
+            return float(10 ** float(self._P_interp(np.log10(density))))
 
-        return 10 ** self._P_interp(np.log10(density))
+        return float(10 ** float(self._P_interp(np.log10(density))))
 
     def energy_density(self, density: float) -> float:
         """Interpolated energy density."""
         if density < self.rho_min:
-            return density * C**2
+            return float(density * C**2)
         if density > self.rho_max:
-            return 10 ** self._eps_interp(np.log10(density))
+            return float(10 ** float(self._eps_interp(np.log10(density))))
 
-        return 10 ** self._eps_interp(np.log10(density))
+        return float(10 ** float(self._eps_interp(np.log10(density))))
 
     def energy_from_pressure(self, pressure: float) -> float:
         """Get energy density from pressure (for TOV integration)."""
         if pressure <= 0:
-            return self._energy_density[0]
+            return float(self._energy_density[0])
         log_P = np.log10(pressure)
-        return 10 ** self._eps_from_P_interp(log_P)
+        return float(10 ** float(self._eps_from_P_interp(log_P)))
 
     def enthalpy(self, density: float) -> float:
         """Interpolated specific enthalpy."""
@@ -145,12 +145,18 @@ class TabulatedEOS(EOSBase):
                 self._log_rho, np.log10(self._enthalpy),
                 kind='linear', bounds_error=False, fill_value='extrapolate'
             )
-            return 10 ** log_h_interp(np.log10(density))
+            return float(10 ** float(log_h_interp(np.log10(density))))
         return super().enthalpy(density)
 
-    def to_table(self, n_points: int = None, **kwargs) -> EOSTable:
+    def to_table(
+        self,
+        n_points: int = 200,
+        rho_min: float = 1e10,
+        rho_max: float = 1e16,
+        log_spacing: bool = True,
+    ) -> EOSTable:
         """Return the underlying table (or resampled version)."""
-        if n_points is None or n_points == len(self._density):
+        if n_points == len(self._density) and rho_min <= self.rho_min and rho_max >= self.rho_max:
             return EOSTable(
                 density=self._density.copy(),
                 pressure=self._pressure.copy(),
@@ -158,7 +164,12 @@ class TabulatedEOS(EOSBase):
                 enthalpy=self._enthalpy.copy() if self._enthalpy is not None else None,
                 baryon_density=self._baryon_density.copy() if self._baryon_density is not None else None,
             )
-        return super().to_table(n_points=n_points, **kwargs)
+        return super().to_table(
+            n_points=n_points,
+            rho_min=rho_min,
+            rho_max=rho_max,
+            log_spacing=log_spacing,
+        )
 
     def __len__(self):
         return len(self._density)

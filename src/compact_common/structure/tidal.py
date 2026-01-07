@@ -12,9 +12,9 @@ References
 """
 
 import numpy as np
-from scipy import integrate
 
-from compact_common.constants import G, C
+from compact_common.constants import M_SUN, C, G
+from compact_common.eos.base import EOSBase
 
 
 def love_number_k2(
@@ -60,7 +60,7 @@ def love_number_k2(
         return 0.0
 
     k2 = prefac * num / denom
-    return max(0, k2)
+    return float(max(0.0, float(k2)))
 
 
 def tidal_deformability(
@@ -94,11 +94,11 @@ def tidal_deformability(
     compactness = M_geom / R
     Lambda = (2.0 / 3.0) * k2 / compactness**5
 
-    return Lambda
+    return float(Lambda)
 
 
 def compute_tidal_deformability(
-    eos,
+    eos: EOSBase,
     central_density: float,
 ) -> float:
     """
@@ -120,23 +120,27 @@ def compute_tidal_deformability(
     """
     from compact_common.structure.tov import TOVSolver
 
-    # Solve TOV first
-    solver = TOVSolver(eos)
-    result = solver.solve(central_density=central_density, store_profile=True)
+    table = eos.to_table(n_points=400, rho_min=1e10, rho_max=max(central_density * 2.0, 1e16))
+    solver = TOVSolver(table.energy_density, table.pressure, units="cgs")
+    solution = solver.solve(central_density=central_density)
 
-    if result.profile is None:
-        return np.nan
+    if solution is None:
+        return float(np.nan)
+
+    radius_km, mass_solar = solution
+    radius_cm = radius_km * 1e5
+    mass_g = mass_solar * M_SUN
 
     # TODO: Implement tidal perturbation ODE integration
     # For now, use approximate relation
 
     # Approximate k2 from fitting formula (Yagi & Yunes 2013)
-    C = result.compactness
-    if C < 0.01:
-        return np.nan
+    compactness = G * mass_g / (radius_cm * C**2)
+    if compactness < 0.01:
+        return float(np.nan)
 
     # Simplified k2 approximation
-    k2_approx = 0.05 + 0.1 * (1 - 5*C)
+    k2_approx = 0.05 + 0.1 * (1 - 5 * compactness)
     k2_approx = max(0, min(0.15, k2_approx))
 
-    return tidal_deformability(result.mass, result.radius, k2_approx)
+    return tidal_deformability(mass_g, radius_cm, float(k2_approx))
